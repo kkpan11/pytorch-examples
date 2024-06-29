@@ -156,9 +156,10 @@ function clean() {
 function run_all() {
   autograd
   custom-dataset
+  regression
   dcgan
   mnist
-  regression
+  
 }
 
 # by default, run all examples

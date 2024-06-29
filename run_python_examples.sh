@@ -10,8 +10,8 @@
 # to pip install dependencies (other than pytorch), run all examples, and remove temporary/changed data files.
 # Expects pytorch, torchvision to be installed.
 
-BASE_DIR=`pwd`"/"`dirname $0`
-EXAMPLES=`echo $1 | sed -e 's/ //g'`
+BASE_DIR="$(pwd)/$(dirname $0)"
+source $BASE_DIR/utils.sh
 
 USE_CUDA=$(python -c "import torchvision, torch; print(torch.cuda.is_available())")
 case $USE_CUDA in
@@ -30,41 +30,9 @@ case $USE_CUDA in
     ;;
 esac
 
-ERRORS=""
-
-function error() {
-  ERR=$1
-  ERRORS="$ERRORS\n$ERR"
-  echo $ERR
-}
-
-function install_deps() {
-  echo "installing requirements"
-  cat $BASE_DIR/*/requirements.txt | \
-    sort -u | \
-    # testing the installed version of torch, so don't pip install it.
-    grep -vE '^torch$' | \
-    pip install -r /dev/stdin || \
-    { error "failed to install dependencies"; exit 1; }
-}
-
-function start() {
-  EXAMPLE=${FUNCNAME[1]}
-  cd $BASE_DIR/$EXAMPLE
-  echo "Running example: $EXAMPLE"
-}
-
 function dcgan() {
   start
   python main.py --dataset fake $CUDA_FLAG --mps --dry-run || error "dcgan failed"
-}
-
-function distributed() {
-    start
-    python tensor_parallelism/tensor_parallel_example.py || error "tensor parallel example failed"
-    python tensor_parallelism/sequence_parallel_example.py || error "sequence parallel example failed"
-    python tensor_parallelism/fsdp_tp_example.py || error "2D parallel example failed"
-    python ddp/main.py || error "ddp example failed"
 }
 
 function fast_neural_style() {
@@ -89,6 +57,13 @@ function imagenet() {
     cp sample/train/n/* sample/val/n/
   fi
   python main.py --epochs 1 sample/ || error "imagenet example failed"
+}
+
+function language_translation() {
+  start
+  python -m spacy download en || error "couldn't download en package from spacy"
+  python -m spacy download de || error "couldn't download de package from spacy"
+  python main.py -e 1 --enc_layers 1 --dec_layers 1 --backend cpu --logging_dir output/ --dry_run || error "language translation example failed"
 }
 
 function mnist() {
@@ -195,6 +170,7 @@ function clean() {
     imagenet/lsun/ \
     imagenet/model_best.pth.tar \
     imagenet/sample/ \
+	language_translation/output/ \
     snli/.data/ \
     snli/.vector_cache/ \
     snli/results/ \
@@ -210,11 +186,12 @@ function clean() {
 }
 
 function run_all() {
-  # cpp
+  # cpp moved to `run_cpp_examples.sh```
   dcgan
-  distributed
+  # distributed moved to `run_distributed_examples.sh`
   fast_neural_style
   imagenet
+  # language_translation
   mnist
   mnist_forward_forward
   mnist_hogwild
@@ -225,7 +202,7 @@ function run_all() {
   super_resolution
   time_sequence_prediction
   vae
-  vision_transformer
+  # vision_transformer - example broken see https://github.com/pytorch/examples/issues/1184 and https://github.com/pytorch/examples/pull/1258 for more details
   word_language_model
   fx
   gcn
@@ -247,8 +224,8 @@ fi
 if [ "" == "$ERRORS" ]; then
   echo "Completed successfully with status $?"
 else
-  echo "Some examples failed:"
-  printf "$ERRORS"
+  echo "Some python examples failed:"
+  printf "$ERRORS\n"
   #Exit with error (0-255) in case of failure in one of the tests.
   exit 1
 
